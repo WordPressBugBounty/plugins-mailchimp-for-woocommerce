@@ -130,6 +130,7 @@ class MailChimp_WooCommerce
         $this->define_gdpr_hooks();
 
         $this->activateMailChimpNewsletter();
+        $this->activateMailchimpSmsConsent();
         $this->activateMailChimpService();
         $this->applyQueryStringOverrides();
     }
@@ -315,6 +316,14 @@ class MailChimp_WooCommerce
 		$this->loader->add_action('wp_enqueue_scripts', $plugin_public, 'enqueue_scripts');
         $this->loader->add_action('wp_footer', $plugin_public, 'add_inline_footer_script');
 
+        if (!defined('MAILCHIMP_PIXEL_ENABLED') || MAILCHIMP_PIXEL_ENABLED === true) {
+            // Mailchimp Pixel addition
+            $pixel_tracking = MailChimp_WooCommerce_Pixel_Tracking::instance();
+            $this->loader->add_action('wp_enqueue_scripts', $pixel_tracking, 'enqueue_tracking_script');
+            $this->loader->add_action('wp_enqueue_scripts', $pixel_tracking, 'enqueue_block_tracking_script');
+            $this->loader->add_action('wp_footer', $pixel_tracking, 'inline_script_data');
+        }
+
         $this->loader->add_action('woocommerce_after_checkout_form', $plugin_public, 'add_JS_checkout');
         $this->loader->add_action('woocommerce_register_form', $plugin_public, 'add_JS_checkout');
 
@@ -356,6 +365,26 @@ class MailChimp_WooCommerce
 			$this->loader->add_action('woocommerce_register_post', $service, 'processRegistrationForm', 10, 3);
 		}
 	}
+
+    private function activateMailchimpSmsConsent()
+    {
+        $sms_consent = MailChimp_Sms_Consent::instance();
+
+        if ($this->is_configured && $sms_consent->isConfigured()) {
+            $sms_consent->setEnvironment($this->environment);
+            $sms_consent->setVersion($this->version);
+
+            $render_on = $sms_consent->getOption('mailchimp_sms_consent_checkbox_action', 'woocommerce_after_checkout_billing_form');
+            $sms_consent_allowed = MailChimp_Sms_Consent::isAllowedToUse();
+
+            if ($sms_consent_allowed) {
+                $this->loader->add_action($render_on, $sms_consent, 'applyField');
+
+                $this->loader->add_action('woocommerce_checkout_order_processed', $sms_consent, 'processSmsConsentField', 10, 2);
+                $this->loader->add_action('woocommerce_ppe_do_payaction', $sms_consent, 'processPayPalSmsConsentField');
+            }
+        }
+    }
 
 	/**
 	 * Handle all the service hooks here.

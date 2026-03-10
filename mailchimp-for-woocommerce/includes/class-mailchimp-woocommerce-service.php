@@ -74,14 +74,6 @@ class MailChimp_Service extends MailChimp_WooCommerce_Options
     }
 
     /**
-     * @param WC_Order $order
-     */
-    public function onNewPayPalOrder($order)
-    {
-        $this->onNewOrder($order->get_id());
-    }
-
-    /**
      * This should only fire on a web based order so we can do real campaign tracking here.
      *
      * @param $order_id
@@ -96,9 +88,8 @@ class MailChimp_Service extends MailChimp_WooCommerce_Options
 
         // grab the landing site cookie if we have one here.
         $landing_site = $this->getLandingSiteCookie();
-        if (empty($landing_site)) {
+        if (empty($landing_site) && is_a($order, 'WC_Order')) {
             $landing_site =  $order->get_meta('mailchimp_woocommerce_landing_site');
-            if (!$landing_site) $campaign = null;
         }
 
         // expire the landing site cookie so we can rinse and repeat tracking
@@ -290,7 +281,7 @@ class MailChimp_Service extends MailChimp_WooCommerce_Options
                 $handler = new MailChimp_WooCommerce_Cart_Update($uid, $user_email, $this->cart, $language, $session_id);
 
                 // if they had the checkbox checked - go ahead and subscribe them if this is the first post.
-                //$handler->setStatus($this->cart_subscribe);
+                $handler->setStatus($this->cart_subscribe);
                 $handler->prepend_to_queue = true;
                 mailchimp_handle_or_queue($handler);
             }
@@ -371,6 +362,7 @@ class MailChimp_Service extends MailChimp_WooCommerce_Options
      */
     public function handleProductUpdated( int $post_ID, ?WP_Post $post_after, ?WP_Post $post_before )
     {
+        mailchimp_log('product.updated', "1");
         if (is_null($post_after) || is_null($post_before)) {
             return;
         }
@@ -427,6 +419,7 @@ class MailChimp_Service extends MailChimp_WooCommerce_Options
             'name',
             'status',
             'slug',
+            'backorders'
         ) );
 
         // if there's not a valid prop in the update, just skip this.
